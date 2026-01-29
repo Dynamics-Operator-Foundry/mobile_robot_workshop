@@ -1,0 +1,6 @@
+[submodule "DukeHumanoidV2"]
+	path = DukeHumanoidV2
+	url = https://github.com/DukeHumanoidV2/DukeHumanoidV2.git
+[submodule "hiwonder_servo"]
+	path = hiwonder_servo
+	url = git@github.com:generalroboticslab/hiwonder_servo.git

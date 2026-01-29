@@ -1,0 +1,72 @@
+#include <mavlink.h>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+
+// Robot geometry 
+static constexpr double C = 0.30; // distance between wheels (m)
+static constexpr double d = 0.12; // wheel diameter (m)
+static constexpr double r = d * 0.5;
+
+//  Control scaling
+static constexpr double MAX_VX = 1.0;  
+static constexpr double MAX_W  = 2.5; 
+// these will be changed when we have the model to test. 
+
+// Open Serial 
+static int open_serial(const char* dev, int baud=115200) {
+    int fd = ::open(dev, O_RDWR | O_NOCTTY | O_NONBLOCK);
+    if (fd < 0) { perror("open"); return -1; }
+    termios tio{}; tcgetattr(fd, &tio); cfmakeraw(&tio);
+    speed_t sp = (baud==57600)?B57600:(baud==230400)?B230400:(baud==460800)?B460800:(baud==921600)?B921600:B115200;
+    cfsetispeed(&tio, sp); cfsetospeed(&tio, sp);
+    tio.c_cflag |= (CLOCAL|CREAD);
+    tio.c_cflag &= ~CSIZE; tio.c_cflag |= CS8;
+    tio.c_cflag &= ~PARENB; tio.c_cflag &= ~CSTOPB;
+    tcsetattr(fd, TCSANOW, &tio);
+    return fd;
+}
+
+int main() {
+    const char* DEV = "/dev/ttyUSB0";     //Change when connected 
+    int fd = open_serial(DEV, 115200);
+    if (fd < 0) return 1;
+
+    double linear_velocity  = 0.0; 
+    double frame_angular_velocity = 0.0;
+
+    mavlink_message_t msg;
+    mavlink_status_t status{};
+    uint8_t byte;
+
+    while (true) {
+        ssize_t n = ::read(fd, &byte, 1);
+        if (n <= 0) { usleep(1000); continue; }
+
+        if (!mavlink_parse_char(MAVLINK_COMM_0, byte, &msg, &status))
+            continue;
+
+        // Read RC_CHANNELS and convert it to velocity
+        if (msg.msgid == MAVLINK_MSG_ID_RC_CHANNELS) {
+            mavlink_rc_channels_t rc;
+            mavlink_msg_rc_channels_decode(&msg, &rc);
+
+            linear_velocity = (rc.chan2_raw - 1500) / 500.0; 
+            frame_angular_velocity = (rc.chan4_raw - 1500) / 500.0;
+
+            double vx = MAX_VX * linear_velocity;             // m/s
+            double w  = MAX_W  * frame_angular_velocity;             // rad/s
+            double wR = (vx + 0.5 * C * w) / r;   
+            double wL = (vx - 0.5 * C * w) / r;   
+
+            //Robstride 02 Control Code here
+        }
+
+        usleep(10'000); // ~100 Hz loop
+    }
+
+    return 0;
+}

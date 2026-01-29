@@ -1,0 +1,1 @@
+source /home/alpha/modular_drone/ros_ws/install/setup.bash && ros2 launch uav_ctrl client.launch.yaml server:=192.168.0.101
